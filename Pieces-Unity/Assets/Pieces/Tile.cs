@@ -6,27 +6,30 @@ using System;
 public class Tile : MonoBehaviour {
 	public int bitmask {get; private set;}
 	public TileHolder tileHolder {get; private set;}
-	public bool isBeingDragged {get; private set;}
+	public bool hasBeenTouched {get; private set;}
 	public Piece[] pieces;
+	public float maxTapLength = 0.2f;
 
 	public GameObject piecePrefab;
 	public GameObject pieceHolder;
 	public LevelManager levelManager;
 
+	private bool isAnimating = false;
 	private List<Tile> curOverlappingTiles;
 	private Vector3 initialTouchPos;
+	private float initialTouchTime = 0;
 	private const int squareBitmask = 255;
 
 	void Update () {
 		if (Input.GetMouseButtonDown(0)) HandleMouseButtonDown();
+		else if (Input.GetMouseButton(0)) HandleMouseButtonHold();
 		else if (Input.GetMouseButtonUp(0)) HandleMouseButtonUp();
-
-		if (isBeingDragged) UpdateWithMousePosition();
 	}
 
 	void HandleDroppedOnTile(Tile otherTile) {
 		CombineBitmaskWithTile(otherTile);
-		SetSemiRandomBitmask();
+		//SetSemiRandomBitmask();
+		SetBitmask(0);
 		ReturnToZeroPosition();
 		SetPieceAlpha(0);
 		SetPieceAlpha(1, 0.2f);
@@ -42,7 +45,7 @@ public class Tile : MonoBehaviour {
 	#region Initialization
 	void Start () {
 		bitmask = 0;
-		isBeingDragged = false;
+		hasBeenTouched = false;
 		levelManager = GameObject.Find("Level Manager").GetComponent<LevelManager>();
 		curOverlappingTiles = new List<Tile>();
 		
@@ -66,27 +69,49 @@ public class Tile : MonoBehaviour {
 
 	#region Input
 	void HandleMouseButtonDown() {
-		Ray ray = GameCamera.gameCam.ScreenPointToRay(Input.mousePosition);
-		RaycastHit hit = new RaycastHit();
-		
-		if(Physics.Raycast(ray, out hit)) {
-			if (hit.transform == transform) {
-				isBeingDragged = true;
-				initialTouchPos = hit.point;
-				initialTouchPos.z = 0;
+		if (!isAnimating) {
+			Ray ray = GameCamera.gameCam.ScreenPointToRay(Input.mousePosition);
+			RaycastHit hit = new RaycastHit();
+			
+			if(Physics.Raycast(ray, out hit)) {
+				if (hit.transform == transform) {
+					initialTouchPos = hit.point;
+					initialTouchPos.z = 0;
+					initialTouchTime = Time.time;
+					hasBeenTouched = true;
+				}
 			}
 		}
 	}
 
-	void HandleMouseButtonUp() {
-		if (isBeingDragged) {
-			Tile closestTile = GetClosestOverlappingTile();
+	void HandleMouseButtonHold() {
+		if (hasBeenTouched) {
+			bool hasHeldLongerThanTap = Time.time - initialTouchTime > maxTapLength;
 
-			if (closestTile != null) HandleDroppedOnTile(closestTile);
-			else ReturnToZeroPosition(0.1f);
-			
-			isBeingDragged = false;
+			if (hasHeldLongerThanTap) UpdateWithMousePosition();
 		}
+	}
+
+	void HandleMouseButtonUp() {
+		if (hasBeenTouched) {
+			bool hasHeldLongerThanTap = Time.time - initialTouchTime > maxTapLength;
+
+			if (hasHeldLongerThanTap) {
+				Tile closestTile = GetClosestOverlappingTile();
+
+				if (closestTile != null) HandleDroppedOnTile(closestTile);
+				else ReturnToZeroPosition(0.1f);
+			}
+			else {
+				HandleTapAndRelease();
+			}
+
+			hasBeenTouched = false;
+		}
+	}
+
+	void HandleTapAndRelease() {
+		RotateTileBy90();
 	}
 	#endregion
 
@@ -102,10 +127,15 @@ public class Tile : MonoBehaviour {
 	}
 	#endregion
 
-	#region Positioning
+	#region Positioning and Rotation
 	public void ReturnToZeroPosition(float time = 0) {
 		if (time == 0) transform.localPosition = Vector3.zero;
-		else Go.to(transform, time, new GoTweenConfig().localPosition(Vector3.zero));
+		else {
+			isAnimating = true;
+			Go.to(transform, time, new GoTweenConfig().localPosition(Vector3.zero).onComplete((tween) => {
+				isAnimating = false;
+			}));
+		}
 	}
 
 	void UpdateWithMousePosition() {
@@ -113,6 +143,28 @@ public class Tile : MonoBehaviour {
 		curTouchPos.z = 0;
 		transform.localPosition = curTouchPos - initialTouchPos;
 	}
+
+	void RotateTileBy90() {
+		isAnimating = true;
+
+		Go.to(transform, 0.11f, new GoTweenConfig().localEulerAngles(new Vector3(0, 0, -90), true).onComplete((tween) => {
+			UpdateBitmaskAfterRotation();
+			isAnimating = false;
+		}));
+	}
+
+	void UpdateBitmaskAfterRotation() {
+		Vector3 localEuler = transform.localEulerAngles;
+		localEuler.z = 0;
+		int newBitmask = 0;
+		for (int i = 0; i < 8; i++) {
+			bool oldBitOn = (bitmask & (1<<i)) == 1<<i;
+			if (oldBitOn) newBitmask |= 1<<((i+2)%8);
+		}
+		SetBitmask(newBitmask);
+		transform.localEulerAngles = localEuler;
+	}
+		    
 	#endregion
 
 	#region Helpers
@@ -170,7 +222,7 @@ public class Tile : MonoBehaviour {
 	void SetBitmaskSimilarToRandomTile(float randomPercent) {
 		int indexOfTileToCopy;
 		
-		do indexOfTileToCopy = UnityEngine.Random.Range(0, 9);
+		do indexOfTileToCopy = UnityEngine.Random.Range(0, levelManager.numTiles);
 		while (indexOfTileToCopy == tileHolder.index);
 		
 		int newBitmask = GetInvertedBitmask(levelManager.tileHolders[indexOfTileToCopy].tile.bitmask);
@@ -197,10 +249,10 @@ public class Tile : MonoBehaviour {
 		int indexOfGoalTile;
 		int indexOfComplementTile;
 
-		do indexOfGoalTile = UnityEngine.Random.Range(0, 9);
+		do indexOfGoalTile = UnityEngine.Random.Range(0, levelManager.numTiles);
 		while (indexOfGoalTile == tileHolder.index);
 
-		do indexOfComplementTile = UnityEngine.Random.Range(0, 9);
+		do indexOfComplementTile = UnityEngine.Random.Range(0, levelManager.numTiles);
 		while (indexOfComplementTile == tileHolder.index || indexOfComplementTile == indexOfGoalTile);
 
 		Tile goalTile = levelManager.tileHolders[indexOfGoalTile].tile;

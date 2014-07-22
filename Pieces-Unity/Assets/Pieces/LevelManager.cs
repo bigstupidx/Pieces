@@ -6,11 +6,17 @@ public class LevelManager : MonoBehaviour {
 	public GameObject tileHolderPrefab;
 	public int score = 0;
 	public int tileMargin = 50;
+	public int puzzleWidth = 3;
+	public int puzzleHeight = 3;
 	public TileHolder[] tileHolders;
 	public Tile[] tiles;
 
+	public int numTiles {get; private set;}
+
 	// Use this for initialization
 	void Start () {
+		numTiles = puzzleWidth * puzzleHeight;
+
 		SetupTileHolders();
 		SetupTiles();
 	}
@@ -21,29 +27,31 @@ public class LevelManager : MonoBehaviour {
 	}
 
 	void SetupTileHolders() {
-		tileHolders = new TileHolder[9];
-		for (int i = 8; i >= 0; i--) {
+		tileHolders = new TileHolder[numTiles];
+
+		for (int i = numTiles - 1; i >= 0; i--) {
 			TileHolder th = ((GameObject)Instantiate(tileHolderPrefab)).GetComponent<TileHolder>();
 			th.name = "Tile Holder " + i.ToString();
 			th.index = i;
 			tileHolders[i] = th;
 		}
 
-		tileHolders[0].transform.position = new Vector3(-tileMargin, tileMargin, 0);
-		tileHolders[1].transform.position = new Vector3(0, tileMargin, 0);
-		tileHolders[2].transform.position = new Vector3(tileMargin, tileMargin, 0);
-		tileHolders[3].transform.position = new Vector3(-tileMargin, 0, 0);
-		tileHolders[4].transform.position = new Vector3(0, 0, 0);
-		tileHolders[5].transform.position = new Vector3(tileMargin, 0, 0);
-		tileHolders[6].transform.position = new Vector3(-tileMargin, -tileMargin, 0);
-		tileHolders[7].transform.position = new Vector3(0, -tileMargin, 0);
-		tileHolders[8].transform.position = new Vector3(tileMargin, -tileMargin, 0);
+		float puzzleWidthInPoints = puzzleWidth * tileMargin;
+		float puzzleHeightInPoints = puzzleHeight * tileMargin;
+
+		Vector2 origin = new Vector2(-puzzleWidthInPoints / 2f, puzzleHeightInPoints / 2f);
+
+		for (int y = 0; y < puzzleHeight; y++) {
+			for (int x = 0; x < puzzleWidth; x++) {
+				tileHolders[x + y * puzzleWidth].transform.position = new Vector3(origin.x + (x + 0.5f) * tileMargin, origin.y - (y + 0.5f) * tileMargin, 0);
+			}
+		}
 	}
 
 	void SetupTiles() {
-		tiles = new Tile[9];
+		tiles = new Tile[numTiles];
 
-		for (int i = 0; i < 9; i++) {
+		for (int i = 0; i < numTiles; i++) {
 			Tile tile = ((GameObject)Instantiate(tilePrefab)).GetComponent<Tile>();
 			tile.transform.parent = tileHolders[i].transform;
 			tile.SetTileHolder(tileHolders[i]);
