@@ -14,6 +14,8 @@ public class Helper : MonoBehaviour {
 	void Awake() {
 		DontDestroyOnLoad(this.gameObject);
 		instance = this;
+
+		Go.defaultEaseType = GoEaseType.SineInOut;
 	}
 
 // screen width and height
