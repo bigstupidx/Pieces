@@ -28,8 +28,8 @@ public class Tile : MonoBehaviour {
 
 	void HandleDroppedOnTile(Tile otherTile) {
 		CombineBitmaskWithTile(otherTile);
-		//SetSemiRandomBitmask();
-		SetBitmask(0);
+		SetSemiRandomBitmask();
+		//SetBitmask(0);
 		ReturnToZeroPosition();
 		SetPieceAlpha(0);
 		SetPieceAlpha(1, 0.2f);
@@ -85,25 +85,19 @@ public class Tile : MonoBehaviour {
 	}
 
 	void HandleMouseButtonHold() {
-		if (hasBeenTouched) {
-			bool hasHeldLongerThanTap = Time.time - initialTouchTime > maxTapLength;
-
-			if (hasHeldLongerThanTap) UpdateWithMousePosition();
-		}
+		if (hasBeenTouched) UpdateWithMousePosition();
 	}
 
 	void HandleMouseButtonUp() {
 		if (hasBeenTouched) {
 			bool hasHeldLongerThanTap = Time.time - initialTouchTime > maxTapLength;
 
-			if (hasHeldLongerThanTap) {
-				Tile closestTile = GetClosestOverlappingTile();
+			Tile closestTile = GetClosestOverlappingTile();
 
-				if (closestTile != null) HandleDroppedOnTile(closestTile);
-				else ReturnToZeroPosition(0.1f);
-			}
+			if (closestTile != null) HandleDroppedOnTile(closestTile);
 			else {
-				HandleTapAndRelease();
+				if (hasHeldLongerThanTap) ReturnToZeroPosition(0.1f);
+				else HandleTapAndRelease();
 			}
 
 			hasBeenTouched = false;
@@ -111,7 +105,8 @@ public class Tile : MonoBehaviour {
 	}
 
 	void HandleTapAndRelease() {
-		RotateTileBy90();
+		ReturnToZeroPosition(0.02f);
+		RotateTileBy45();
 	}
 	#endregion
 
@@ -144,22 +139,23 @@ public class Tile : MonoBehaviour {
 		transform.localPosition = curTouchPos - initialTouchPos;
 	}
 
-	void RotateTileBy90() {
+	void RotateTileBy45() {
 		isAnimating = true;
+		//RotateBitmaskBy45();
+		Go.to(transform, 0.05f, new GoTweenConfig().localEulerAngles(new Vector3(0, 0, -45), true).onComplete((tween) => {
+			RotateBitmaskBy45();
 
-		Go.to(transform, 0.11f, new GoTweenConfig().localEulerAngles(new Vector3(0, 0, -90), true).onComplete((tween) => {
-			UpdateBitmaskAfterRotation();
 			isAnimating = false;
 		}));
 	}
 
-	void UpdateBitmaskAfterRotation() {
+	void RotateBitmaskBy45() {
 		Vector3 localEuler = transform.localEulerAngles;
 		localEuler.z = 0;
 		int newBitmask = 0;
 		for (int i = 0; i < 8; i++) {
 			bool oldBitOn = (bitmask & (1<<i)) == 1<<i;
-			if (oldBitOn) newBitmask |= 1<<((i+2)%8);
+			if (oldBitOn) newBitmask |= 1<<((i+1)%8);
 		}
 		SetBitmask(newBitmask);
 		transform.localEulerAngles = localEuler;
